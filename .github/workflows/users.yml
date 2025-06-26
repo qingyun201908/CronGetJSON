@@ -9,7 +9,6 @@ env:
   # 集中管理JSON源列表（名称|URL）
   JSON_SOURCES: >
     users|https://profile-content.hydev.org/content/generated/friends/friends.json
-    events|https://profile-api.hydev.org/exports/hykilp/posts.json
   DATA_DIR: './data'
 
 jobs:
