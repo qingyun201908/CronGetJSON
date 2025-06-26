@@ -30,13 +30,12 @@ jobs:
       - name: Setup JSON sources
         id: set-json-sources
         run: |
-          # 定义要下载的JSON源，格式：name|url
-          echo "sources='"
-          echo "stats|https://profile-content.hydev.org/content/generated/metas.json"
-          echo "users|https://profile-content.hydev.org/content/generated/friends/friends.json"
-          echo "events|https://profile-api.hydev.org/exports/hykilp/posts.json"
-          echo "'" >> $GITHUB_OUTPUT
-        # 在shell中输出值
+          sources="stats|https://profile-content.hydev.org/content/generated/metas.json
+                  users|https://profile-content.hydev.org/content/generated/friends/friends.json
+                  events|https://profile-api.hydev.org/exports/hykilp/posts.json"
+          echo "sources<<EOF" >> $GITHUB_OUTPUT
+          echo "$sources" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
         shell: bash
 
       # 4. 循环下载所有JSON文件
