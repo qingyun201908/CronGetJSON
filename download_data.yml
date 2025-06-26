@@ -1,9 +1,9 @@
-name: Daily JSON Download
+name: Hourly JSON Download
 
 on:
-  # 定时触发器（北京时间每天 08:00）
+  # 定时触发器（每小时执行一次）
   schedule:
-    - cron: '0 0 * * *'  # UTC 时间 00:00 (北京时间 08:00)
+    - cron: '0 * * * *'  # 每小时的第0分钟执行（UTC时间）
 
   # 手动触发选项（用于调试）
   workflow_dispatch:
@@ -18,17 +18,17 @@ jobs:
         with:
           persist-credentials: false
 
-      # 2. 设置下载目录（自动按日期创建）
+      # 2. 设置下载目录（自动按日期和时间创建）
       - name: Prepare directory
         run: |
-          TODAY=$(date -u +'%Y-%m-%d')
-          mkdir -p "./data/$TODAY"
-          echo "DIR_PATH=./data/$TODAY" >> $GITHUB_ENV
+          DATETIME=$(date -u +'%Y-%m-%d/%H')
+          mkdir -p "./data/$DATETIME"
+          echo "DIR_PATH=./data/$DATETIME" >> $GITHUB_ENV
 
       # 3. 下载 JSON 文件（带错误处理）
       - name: Download JSON data
         run: |
-          URL="https://api.example.com/data.json"
+          URL="https://profile-api.hydev.org/exports/hykilp/posts.json"
           curl -sSf "$URL" -o "$DIR_PATH/data.json"
           
           # 验证 JSON 格式
@@ -45,5 +45,11 @@ jobs:
           git config user.name "GitHub JSON Downloader"
           git config user.email "json-downloader@noreply.github.com"
           git add ./data/
-          git diff-index --quiet HEAD || git commit -m "Data update: $(date -u +'%Y-%m-%d %H:%M')"
-          git push origin main
+          
+          # 仅在文件有变化时提交
+          if git diff-index --quiet HEAD; then
+            echo "No changes to commit"
+          else
+            git commit -m "Hourly data update: $(date -u +'%Y-%m-%d %H:%M')"
+            git push origin main
+          fi
