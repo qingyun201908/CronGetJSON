@@ -1,0 +1,82 @@
+name: Daily JSON Download
+
+on:
+  schedule:
+    - cron: '0 5 * * *'  # UTC 4:00 (北京时间12:00)
+  workflow_dispatch:
+
+env:
+  # 集中管理JSON源列表（名称|URL）
+  JSON_SOURCES: >
+    users|https://profile-content.hydev.org/content/generated/friends/friends.json
+    events|https://profile-api.hydev.org/exports/hykilp/posts.json
+  DATA_DIR: './data'
+
+jobs:
+  download-json:
+    runs-on: ubuntu-latest
+    outputs:
+      json-updated: ${{ steps.collect-results.outputs.json-updated }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整提交历史
+
+      - name: Setup directories
+        run: |
+          TODAY=$(date -u +'%Y-%m-%d')
+          echo "DATE_TAG=$TODAY" >> $GITHUB_ENV
+          mkdir -p "$DATA_DIR/$TODAY"
+        
+      - name: Download JSON files
+        id: download
+        run: |
+          set -euo pipefail  # 启用严格错误检查
+          IFS=$'\n'
+          any_updated=false
+          
+          for source in $JSON_SOURCES; do
+            name="${source%%|*}"
+            url="${source##*|}"
+            dir_path="$DATA_DIR/$DATE_TAG/$name"
+            
+            echo "📥 Downloading $name.json"
+            mkdir -p "$dir_path"
+            curl -sSfL "$url" -o "$dir_path/data.json"
+            
+            if jq empty "$dir_path/data.json" >/dev/null 2>&1; then
+              echo "✅ Valid JSON: $name"
+              any_updated=true
+            else
+              echo "❌ Invalid JSON: $name" >&2
+              rm -f "$dir_path/data.json"
+              exit 1
+            fi
+          done
+          
+          echo "json-updated=$any_updated" >> $GITHUB_OUTPUT
+        env:
+          JSON_SOURCES: ${{ env.JSON_SOURCES }}
+
+      - name: Collect results
+        id: collect-results
+        run: |
+          echo "json-updated=${{ steps.download.outputs.json-updated }}" >> $GITHUB_OUTPUT
+
+      - name: Commit updates
+        if: ${{ steps.collect-results.outputs.json-updated == 'true' }}
+        run: |
+          git config user.name "Automated JSON Updater"
+          git config user.email "actions@users.noreply.github.com"
+          git add "$DATA_DIR"
+          
+          if git diff-index --quiet HEAD --; then
+            echo "🟢 No changes detected"
+          else
+            git commit -m "📊 JSON data update: ${{ env.DATE_TAG }}"
+            git push origin main
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
