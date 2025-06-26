@@ -1,0 +1,49 @@
+name: Daily JSON Download
+
+on:
+  # 定时触发器（北京时间每天 08:00）
+  schedule:
+    - cron: '0 0 * * *'  # UTC 时间 00:00 (北京时间 08:00)
+
+  # 手动触发选项（用于调试）
+  workflow_dispatch:
+
+jobs:
+  download-json:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. 检出仓库代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # 2. 设置下载目录（自动按日期创建）
+      - name: Prepare directory
+        run: |
+          TODAY=$(date -u +'%Y-%m-%d')
+          mkdir -p "./data/$TODAY"
+          echo "DIR_PATH=./data/$TODAY" >> $GITHUB_ENV
+
+      # 3. 下载 JSON 文件（带错误处理）
+      - name: Download JSON data
+        run: |
+          URL="https://api.example.com/data.json"
+          curl -sSf "$URL" -o "$DIR_PATH/data.json"
+          
+          # 验证 JSON 格式
+          if ! jq empty "$DIR_PATH/data.json"; then
+            echo "❌ Invalid JSON format"
+            exit 1
+          fi
+        env:
+          DIR_PATH: ${{ env.DIR_PATH }}
+
+      # 4. 提交更改到仓库
+      - name: Commit changes
+        run: |
+          git config user.name "GitHub JSON Downloader"
+          git config user.email "json-downloader@noreply.github.com"
+          git add ./data/
+          git diff-index --quiet HEAD || git commit -m "Data update: $(date -u +'%Y-%m-%d %H:%M')"
+          git push origin main
