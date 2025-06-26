@@ -1,4 +1,4 @@
-name: Daily JSON Download
+name: events Download
 
 on:
   schedule:
