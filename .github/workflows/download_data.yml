@@ -31,8 +31,8 @@ jobs:
         id: set-json-sources
         run: |
           sources="stats|https://profile-content.hydev.org/content/generated/metas.json
-                  users|https://profile-content.hydev.org/content/generated/friends/friends.json
-                  events|https://profile-api.hydev.org/exports/hykilp/posts.json"
+users|https://profile-content.hydev.org/content/generated/friends/friends.json
+events|https://profile-api.hydev.org/exports/hykilp/posts.json"
           echo "sources<<EOF" >> $GITHUB_OUTPUT
           echo "$sources" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
