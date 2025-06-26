@@ -1,11 +1,11 @@
-name: Hourly JSON Download
+name: Daily JSON Download
 
 on:
-  # 定时触发器（每小时执行一次）
+  # 定时触发器（北京时间每天12:00）
   schedule:
-    - cron: '0 * * * *'  # 每小时的第0分钟执行（UTC时间）
+    - cron: '0 4 * * *'  # UTC时间4:00 (北京时间12:00)
 
-  # 手动触发选项（用于调试）
+  # 手动触发选项
   workflow_dispatch:
 
 jobs:
@@ -18,38 +18,64 @@ jobs:
         with:
           persist-credentials: false
 
-      # 2. 设置下载目录（自动按日期和时间创建）
+      # 2. 设置下载目录
       - name: Prepare directory
         run: |
-          DATETIME=$(date -u +'%Y-%m-%d/%H')
-          mkdir -p "./data/$DATETIME"
-          echo "DIR_PATH=./data/$DATETIME" >> $GITHUB_ENV
+          TODAY=$(date -u +'%Y-%m-%d')
+          mkdir -p "./data/$TODAY"
+          echo "DIR_PATH=./data/$TODAY" >> $GITHUB_ENV
+          echo "JSON_UPDATED=false" >> $GITHUB_ENV  # 初始化为false
 
-      # 3. 下载 JSON 文件（带错误处理）
-      - name: Download JSON data
+      # 3. 定义JSON源列表
+      - name: Setup JSON sources
+        id: set-json-sources
         run: |
-          URL="https://profile-api.hydev.org/exports/hykilp/posts.json"
-          curl -sSf "$URL" -o "$DIR_PATH/data.json"
-          
-          # 验证 JSON 格式
-          if ! jq empty "$DIR_PATH/data.json"; then
-            echo "❌ Invalid JSON format"
-            exit 1
-          fi
+          # 定义要下载的JSON源，格式：name|url
+          echo "sources='"
+          echo "stats|https://profile-content.hydev.org/content/generated/metas.json"
+          echo "users|https://profile-content.hydev.org/content/generated/friends/friends.json"
+          echo "events|https://profile-api.hydev.org/exports/hykilp/posts.json"
+          echo "'" >> $GITHUB_OUTPUT
+        # 在shell中输出值
+        shell: bash
+
+      # 4. 循环下载所有JSON文件
+      - name: Download multiple JSONs
+        run: |
+          # 使用IFS处理多行输入
+          IFS=$'\n'
+          for source in ${{ steps.set-json-sources.outputs.sources }}
+          do
+            # 拆分每行的name和url
+            name=$(echo "$source" | cut -d'|' -f1)
+            url=$(echo "$source" | cut -d'|' -f2)
+            
+            echo "📥 Downloading $name.json from $url"
+            
+            # 创建子目录并下载
+            mkdir -p "$DIR_PATH/$name"
+            curl -sSf "$url" -o "$DIR_PATH/$name/data.json"
+            
+            # 验证JSON格式
+            if jq empty "$DIR_PATH/$name/data.json"; then
+              echo "✅ $name.json downloaded and validated"
+              echo "JSON_UPDATED=true" >> $GITHUB_ENV
+            else
+              echo "❌ Invalid JSON format for $name.json"
+              exit 1
+            fi
+          done
         env:
           DIR_PATH: ${{ env.DIR_PATH }}
 
-      # 4. 提交更改到仓库
+      # 5. 提交更改（仅当有更新时）
       - name: Commit changes
+        if: env.JSON_UPDATED == 'true'
         run: |
           git config user.name "GitHub JSON Downloader"
           git config user.email "json-downloader@noreply.github.com"
           git add ./data/
-          
-          # 仅在文件有变化时提交
-          if git diff-index --quiet HEAD; then
-            echo "No changes to commit"
-          else
-            git commit -m "Hourly data update: $(date -u +'%Y-%m-%d %H:%M')"
-            git push origin main
-          fi
+          git commit -m "JSON data update: $(date -u +'%Y-%m-%d')"
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
